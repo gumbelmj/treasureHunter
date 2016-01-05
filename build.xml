@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project name="RA" basedir="." default="jar">
+
+	<property name="jar" value="test.jar" />
+	<target name="jar" depends="clean,compile">
+
+		<manifestclasspath property="manifest.classpath" jarfile="${jar}">
+			<classpath refid="cobertura.classpath" />
+		</manifestclasspath>
+
+		<unjar src="lib/opencsv-2.3.jar" dest="${classes.dir}" />
+		<unjar src="lib/stringtotime-1.0.4.jar" dest="${classes.dir}" />
+
+		<jar destfile="${jar}">
+			<fileset dir="${classes.dir}" />
+			<include name="${classes.dir}" />
+			<manifest>
+				<attribute name="Built-By" value="${user.name}" />
+				<attribute name="Specification-Title" value="Treasure Hunter Simplifer" />
+				<attribute name="Specification-Version" value="${version}" />
+				<attribute name="Specification-Vendor" value="Rolled Alloys" />
+				<attribute name="Main-Class" value="com.rolledAlloys.mapReader.HuntTreasure" />
+				<attribute name="Class-Path" value=". ${manifest.classpath}" />
+			</manifest>
+		</jar>
+	</target>
+
+	<property file="build.properties" />
+
+	<path id="cobertura.classpath">
+		<fileset dir="${cobertura.dir}">
+			<include name="cobertura*.jar" />
+			<include name="lib/**/*.jar" />
+		</fileset>
+		<fileset dir="lib">
+			<include name="**/*.jar" />
+		</fileset>
+	</path>
+
+
+	<taskdef classpathref="cobertura.classpath" resource="tasks.properties" />
+
+	<target name="init">
+		<mkdir dir="${classes.dir}" />
+		<mkdir dir="${instrumented.dir}" />
+		<mkdir dir="${reports.xml.dir}" />
+		<mkdir dir="${reports.html.dir}" />
+		<mkdir dir="${coverage.xml.dir}" />
+		<mkdir dir="${coverage.summaryxml.dir}" />
+		<mkdir dir="${coverage.html.dir}" />
+	</target>
+
+	<target name="compile" depends="init">
+		<javac srcdir="${src.dir}" destdir="${classes.dir}" debug="yes">
+			<classpath refid="cobertura.classpath" />
+		</javac>
+	</target>
+
+	<target name="compile.tests" depends="compile">
+		<javac srcdir="test" destdir="${classes.dir}" debug="yes">
+			<classpath refid="cobertura.classpath" />
+		</javac>
+	</target>
+
+	<target name="instrument" depends="compile.tests">
+		<!--
+	      Remove the coverage data file and any old instrumentation.
+	    -->
+		<delete file="cobertura.ser" />
+		<delete dir="${instrumented.dir}" />
+
+		<!--
+	      Instrument the application classes, writing the
+	      instrumented classes into ${build.instrumented.dir}.
+	    -->
+		<cobertura-instrument todir="${instrumented.dir}">
+			<!--
+	        The following line causes instrument to ignore any
+	        source line containing a reference to log4j, for the
+	        purposes of coverage reporting.
+	      -->
+			<ignore regex="org.apache.log4j.*" />
+
+			<fileset dir="${classes.dir}">
+				<!--
+	          Instrument all the application classes, but
+	          don't instrument the test classes.
+	        -->
+				<include name="**/*.class" />
+				<exclude name="**/*Test.class" />
+			</fileset>
+		</cobertura-instrument>
+	</target>
+
+	<target name="test" depends="instrument" description="Runs all unit tests">
+		<junit fork="yes" dir="${basedir}" failureProperty="test.failed">
+			<!--
+	        Note the classpath order: instrumented classes are before the
+	        original (uninstrumented) classes.  This is important.
+	      -->
+			<classpath location="${instrumented.dir}" />
+			<classpath location="${classes.dir}" />
+
+			<!--
+	        The instrumented classes reference classes used by the
+	        Cobertura runtime, so Cobertura and its dependencies
+	        must be on your classpath.
+	      -->
+			<classpath refid="cobertura.classpath" />
+
+			<formatter type="xml" />
+			<test name="${testcase}" todir="${reports.xml.dir}" if="testcase" />
+			<batchtest todir="${reports.xml.dir}" unless="testcase">
+				<fileset dir="test">
+					<include name="**/*Test.java" />
+				</fileset>
+			</batchtest>
+		</junit>
+
+		<junitreport todir="${reports.xml.dir}">
+			<fileset dir="${reports.xml.dir}">
+				<include name="TEST-*.xml" />
+			</fileset>
+			<report format="frames" todir="${reports.html.dir}" />
+		</junitreport>
+
+		<cobertura-report destdir="${coverage.html.dir}">
+			<fileset dir="${src.dir}">
+				<include name="**/*.java" />
+			</fileset>
+		</cobertura-report>
+
+		<cobertura-report srcdir="${src.dir}" destdir="${coverage.summaryxml.dir}" format="summaryXml" />
+		<cobertura-report srcdir="${src.dir}" destdir="${coverage.xml.dir}" format="xml" />
+	</target>
+
+	<target name="coverage-check">
+		<cobertura-check branchrate="34" totallinerate="100" />
+	</target>
+
+	<target name="clean" description="Remove all files created by the build/test process.">
+		<delete dir="${classes.dir}" />
+		<delete dir="${instrumented.dir}" />
+		<delete dir="${reports.dir}" />
+		<delete file="cobertura.log" />
+		<delete file="cobertura.ser" />
+		<delete file="${jar}" />
+		<delete dir="build" />
+	</target>
+</project>
